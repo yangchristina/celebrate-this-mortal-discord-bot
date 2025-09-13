@@ -1,6 +1,5 @@
 import { Client, GatewayIntentBits, REST, Routes, Events, Interaction } from 'discord.js';
 import admin from 'firebase-admin';
-import * as cron from 'node-cron';
 import * as dotenv from 'dotenv';
 
 // Load environment variables
@@ -28,9 +27,9 @@ const client = new Client({
   ]
 });
 
-// Import command handlers (will be created later)
+// Import command handlers
 import { setBirthdayCommand } from './commands/setBirthday';
-import { checkBirthdays } from './scheduler';
+import { getBirthdayCommand } from './commands/getBirthday';
 
 // Slash command definitions
 const commands = [
@@ -46,8 +45,20 @@ const commands = [
       },
       {
         name: 'date',
-        description: 'Birthday date in YYYY-MM-DD format',
+        description: 'Birthday date in MM-DD format (e.g., 12-25)',
         type: 3, // STRING type
+        required: true
+      }
+    ]
+  },
+  {
+    name: 'get-birthday',
+    description: 'Check a user\'s birthday',
+    options: [
+      {
+        name: 'user',
+        description: 'The user whose birthday to check',
+        type: 6, // USER type
         required: true
       }
     ]
@@ -100,6 +111,9 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
       case 'set-birthday':
         await setBirthdayCommand.execute(interaction);
         break;
+      case 'get-birthday':
+        await getBirthdayCommand.execute(interaction);
+        break;
       default:
         await interaction.reply({ content: 'Command not implemented yet!', ephemeral: true });
     }
@@ -112,16 +126,6 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
     } else {
       await interaction.reply({ content: errorMessage, ephemeral: true });
     }
-  }
-});
-
-// Set up daily birthday check at midnight UTC
-cron.schedule('0 0 * * *', async () => {
-  console.log('Running daily birthday check...');
-  try {
-    await checkBirthdays(client);
-  } catch (error) {
-    console.error('Error during birthday check:', error);
   }
 });
 

@@ -1,6 +1,7 @@
 import { Client, ChannelType, PermissionFlagsBits, TextChannel } from 'discord.js';
 import { getUpcomingBirthdays, getBirthdaysForDate } from './utils/firestore';
 import { findBirthdayChannel, updateChannelForUsernameChange } from './utils/channelUtils';
+import admin from 'firebase-admin';
 
 /**
  * Check for birthdays that need card coordination to start (14 days ahead)
@@ -161,15 +162,12 @@ async function revealBirthdayCard(client: Client, userId: string) {
           await member.roles.add(birthdayRole);
           console.log(`Added ${birthdayRoleName} role to ${member.user.username}`);
 
-          // Schedule role removal after 24 hours
-          setTimeout(async () => {
-            try {
-              await member.roles.remove(birthdayRole);
-              console.log(`Removed ${birthdayRoleName} role from ${member.user.username}`);
-            } catch (error) {
-              console.error(`Error removing birthday role:`, error);
-            }
-          }, 24 * 60 * 60 * 1000); // 24 hours in milliseconds
+          // Schedule role removal after 24 hours using persistent storage
+          await scheduleEvent('remove_birthday_role', new Date(Date.now() + 24 * 60 * 60 * 1000), {
+            userId: member.id,
+            guildId: guild.id,
+            roleName: birthdayRoleName
+          });
         }
       }
 
@@ -183,4 +181,123 @@ async function revealBirthdayCard(client: Client, userId: string) {
       console.error(`Error revealing birthday in guild ${guild.name}:`, error);
     }
   }
+}
+
+// Helper function to schedule future events
+export async function scheduleEvent(type: string, scheduledFor: Date, data: any) {
+  const db = admin.firestore();
+
+  await db.collection('scheduled_events').add({
+    type,
+    scheduledFor,
+    completed: false,
+    createdAt: new Date(),
+    attempts: 0,
+    ...data
+  });
+
+  console.log(`📅 Scheduled ${type} for ${scheduledFor.toISOString()}`);
+}
+
+// Process scheduled events from Firestore
+export async function processScheduledEvents(client: Client) {
+  console.log('Processing scheduled events...');
+
+  try {
+    const db = admin.firestore();
+    const now = new Date();
+
+    // Get all pending scheduled events
+    const eventsRef = db.collection('scheduled_events');
+    const snapshot = await eventsRef
+      .where('scheduledFor', '<=', now)
+      .where('completed', '==', false)
+      .limit(50) // Process in batches
+      .get();
+
+    if (snapshot.empty) {
+      console.log('No scheduled events to process');
+      return;
+    }
+
+    console.log(`Found ${snapshot.size} scheduled events to process`);
+
+    for (const doc of snapshot.docs) {
+      const event = doc.data();
+
+      try {
+        await executeScheduledEvent(client, event);
+        await doc.ref.update({
+          completed: true,
+          completedAt: new Date(),
+          status: 'success'
+        });
+        console.log(`✅ Completed event: ${event.type} for user ${event.userId}`);
+
+      } catch (error) {
+        console.error(`❌ Failed to execute event ${doc.id}:`, error);
+        await doc.ref.update({
+          attempts: (event.attempts || 0) + 1,
+          lastError: error instanceof Error ? error.message : 'Unknown error',
+          lastAttempt: new Date()
+        });
+      }
+    }
+
+  } catch (error) {
+    console.error('Error processing scheduled events:', error);
+    throw error;
+  }
+}
+
+async function executeScheduledEvent(client: Client, event: any) {
+  switch (event.type) {
+    case 'remove_birthday_role':
+      await removeBirthdayRole(client, event);
+      break;
+
+    case 'send_reminder':
+      await sendSigningReminder(client, event);
+      break;
+
+    case 'cleanup_channel':
+      await cleanupBirthdayChannel(client, event);
+      break;
+
+    default:
+      console.warn(`Unknown event type: ${event.type}`);
+  }
+}
+
+async function removeBirthdayRole(client: Client, event: any) {
+  const guild = client.guilds.cache.get(event.guildId);
+  if (!guild) return;
+
+  const member = await guild.members.fetch(event.userId).catch(() => null);
+  if (!member) return;
+
+  const role = guild.roles.cache.find(r => r.name === event.roleName);
+  if (!role) return;
+
+  await member.roles.remove(role);
+  console.log(`Removed ${event.roleName} role from ${member.user.username}`);
+}
+
+async function sendSigningReminder(client: Client, event: any) {
+  const channel = client.channels.cache.get(event.channelId);
+  if (!channel || !channel.isTextBased()) return;
+
+  await (channel as TextChannel).send({
+    content: `⏰ **Reminder: Sign the birthday card!**\n\n` +
+            `Deadline: ${event.deadline}\n` +
+            `Signing link: ${event.signingUrl}`
+  });
+}
+
+async function cleanupBirthdayChannel(client: Client, event: any) {
+  const channel = client.channels.cache.get(event.channelId);
+  if (!channel) return;
+
+  await channel.delete('Birthday card coordination completed');
+  console.log(`Deleted birthday channel: ${event.channelName}`);
 }

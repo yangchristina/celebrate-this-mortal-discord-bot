@@ -31,7 +31,7 @@ v                 v                 v                 v                v        
          Final signature check completed
                         |
                         v
-             🎉 Card Revealed Publicly 🎉
+             🎉 Card Revealed at Midnight UTC 🎉
            Temporary Birthday Star role assigned
            Private coordination channel deleted
 ```

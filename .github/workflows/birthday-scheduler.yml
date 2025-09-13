@@ -1,0 +1,91 @@
+name: Birthday Scheduler
+
+on:
+  schedule:
+    # Run daily at midnight UTC for birthday checks AND reveals
+    - cron: '0 0 * * *'
+    # Run every 6 hours for scheduled events processing
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allow manual trigger
+    inputs:
+      task_type:
+        description: 'Type of scheduler task to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+        - daily
+        - hourly
+        - reveals
+        - all
+
+jobs:
+  daily-birthday-tasks:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 0 * * *' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.task_type == 'daily' || github.event.inputs.task_type == 'reveals' || github.event.inputs.task_type == 'all'))
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run daily birthday check (14 days ahead)
+      env:
+        DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+        FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+        FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+      run: npm run scheduler:daily
+
+    - name: Check birthday reveals (today's birthdays)
+      env:
+        DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+        FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+        FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+      run: npm run scheduler:reveals
+
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "❌ Daily birthday tasks failed at $(date)"
+        exit 1
+
+  scheduled-events:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 */6 * * *' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.task_type == 'hourly' || github.event.inputs.task_type == 'all'))
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Process scheduled events
+      env:
+        DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+        FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+        FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+      run: npm run scheduler:hourly
+
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "❌ Scheduled events processing failed at $(date)"
+        exit 1

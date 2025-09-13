@@ -7,6 +7,11 @@
     "start": "node dist/index.js",
     "build": "tsc",
     "dev": "ts-node src/index.ts",
+    "scheduler": "ts-node src/external-scheduler.ts",
+    "scheduler:daily": "ts-node src/external-scheduler.ts daily",
+    "scheduler:hourly": "ts-node src/external-scheduler.ts hourly",
+    "scheduler:reveals": "ts-node src/external-scheduler.ts reveals",
+    "scheduler:test": "ts-node src/test-scheduler.ts",
     "test": "jest"
   },
   "keywords": [

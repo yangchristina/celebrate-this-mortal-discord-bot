@@ -1,5 +1,5 @@
 import { ChatInputCommandInteraction, User } from 'discord.js';
-import { setBirthday, isValidBirthday } from '../utils/firestore';
+import { setBirthday, isValidBirthday, getBirthday } from '../utils/firestore';
 
 export const setBirthdayCommand = {
   name: 'set-birthday',
@@ -16,7 +16,7 @@ export const setBirthdayCommand = {
       if (!isValidBirthday(dateString)) {
         console.log(`Date validation failed for: "${dateString}"`);
         await interaction.reply({
-          content: `❌ Invalid date format! Please use YYYY-MM-DD format (e.g., 2000-12-25).\nReceived: "${dateString}"`,
+          content: `❌ Invalid date format! Please use MM-DD format (e.g., 12-25 for December 25th).\nReceived: "${dateString}"`,
           ephemeral: true
         });
         return;
@@ -34,17 +34,38 @@ export const setBirthdayCommand = {
       // TODO: Add admin permission check
       // For now, allow anyone to set birthdays for testing
 
+      // Check if birthday already exists
+      const existingBirthday = await getBirthday(user.id);
+      if (existingBirthday) {
+        await interaction.reply({
+          content: `⚠️ **${user.displayName} already has a birthday set: ${existingBirthday}**\n\n` +
+                  `Would you like to update it to ${dateString}? React with ✅ to confirm.`,
+          ephemeral: true
+        });
+        // TODO: Add reaction-based confirmation for updates
+        return;
+      }
+
       // Store the birthday in Firestore
       await setBirthday(user.id, dateString);
 
       // Calculate when the card event will start (14 days before)
-      const birthdayDate = new Date(dateString);
+      // For MM-DD format, we'll use the current year or next year if the date has passed
+      const [month, day] = dateString.split('-').map(num => parseInt(num, 10));
+      const currentYear = new Date().getFullYear();
+      const birthdayThisYear = new Date(currentYear, month - 1, day); // month is 0-indexed
+      const today = new Date();
+
+      // If the birthday has already passed this year, use next year
+      const birthdayDate = birthdayThisYear < today
+        ? new Date(currentYear + 1, month - 1, day)
+        : birthdayThisYear;
+
       const eventStartDate = new Date(birthdayDate);
       eventStartDate.setDate(birthdayDate.getDate() - 14);
 
-      // Format dates for display
+      // Format dates for display (without year for birthday)
       const birthdayFormatted = birthdayDate.toLocaleDateString('en-US', {
-        year: 'numeric',
         month: 'long',
         day: 'numeric'
       });
