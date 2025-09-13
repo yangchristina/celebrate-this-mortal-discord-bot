@@ -1,0 +1,37 @@
+{
+  "name": "celebrate-this-mortal-discord-bot",
+  "version": "1.0.0",
+  "description": "A Discord bot that helps communities celebrate birthdays with hype and collaboration",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "test": "jest"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "birthday",
+    "e-card",
+    "celebration"
+  ],
+  "author": "Christina Yang",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "firebase-admin": "^11.11.1",
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.3.1",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.8",
+    "@types/node": "^20.8.10",
+    "@types/node-cron": "^3.0.11",
+    "@types/node-fetch": "^2.6.8",
+    "jest": "^29.7.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
+  }
+}
