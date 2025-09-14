@@ -141,6 +141,10 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
         // Store the birthday in Firestore
         await setBirthday(userId, newDate);
 
+        // Check if immediate coordination is needed
+        const { checkImmediateCoordination } = await import('./scheduler');
+        await checkImmediateCoordination(client, userId);
+
         // Get user object for display
         const user = await client.users.fetch(userId);
 

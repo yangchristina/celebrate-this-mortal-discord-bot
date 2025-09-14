@@ -50,12 +50,6 @@ export async function setBirthday(userId: string, birthday: string): Promise<voi
 export async function getUpcomingBirthdays(daysAhead: number = 14): Promise<Birthday[]> {
   try {
     const today = new Date();
-    const targetDate = new Date(today);
-    targetDate.setDate(today.getDate() + daysAhead);
-
-    // Format as MM-DD to match against stored birthdays
-    const targetMonthDay = formatMonthDay(targetDate);
-
     const birthdaysRef = db.collection('birthdays');
     const snapshot = await birthdaysRef.get();
 
@@ -64,8 +58,20 @@ export async function getUpcomingBirthdays(daysAhead: number = 14): Promise<Birt
     snapshot.forEach((docSnap: any) => {
       const data = docSnap.data();
       if (data.birthday) {
-        // Birthday is already in MM-DD format, compare directly
-        if (data.birthday === targetMonthDay) {
+        // Parse the MM-DD format
+        const [month, day] = data.birthday.split('-').map(Number);
+        const currentYear = today.getFullYear();
+        let birthdayThisYear = new Date(currentYear, month - 1, day);
+
+        // If birthday has passed this year, use next year
+        if (birthdayThisYear < today) {
+          birthdayThisYear = new Date(currentYear + 1, month - 1, day);
+        }
+
+        // Check if birthday is within the specified days ahead
+        const daysUntilBirthday = Math.ceil((birthdayThisYear.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (daysUntilBirthday >= 0 && daysUntilBirthday <= daysAhead) {
           upcomingBirthdays.push({
             userId: data.userId,
             birthday: data.birthday,

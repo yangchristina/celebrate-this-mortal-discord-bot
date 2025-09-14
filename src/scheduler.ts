@@ -4,6 +4,62 @@ import { findBirthdayChannel, updateChannelForUsernameChange } from './utils/cha
 import admin from 'firebase-admin';
 
 /**
+ * Check if birthday coordination has already started for a user
+ */
+async function checkCoordinationStatus(client: Client, userId: string): Promise<boolean> {
+  const guilds = client.guilds.cache;
+
+  for (const [guildId, guild] of guilds) {
+    try {
+      // Check if the user is in this guild
+      const member = await guild.members.fetch(userId).catch(() => null);
+      if (!member) {
+        continue; // User not in this guild
+      }
+
+      // Check if coordination channel already exists
+      const existingChannel = findBirthdayChannel(guild, userId, member.user.username);
+      if (existingChannel) {
+        return true; // Coordination has already started
+      }
+    } catch (error) {
+      console.error(`Error checking coordination status for user ${userId} in guild ${guild.name}:`, error);
+    }
+  }
+
+  return false; // No coordination found
+}
+
+/**
+ * Check if a newly set birthday needs immediate coordination
+ */
+export async function checkImmediateCoordination(client: Client, userId: string) {
+  try {
+    console.log(`Checking if immediate coordination needed for user ${userId}`);
+
+    // Check if coordination has already started
+    const hasCoordinationStarted = await checkCoordinationStatus(client, userId);
+
+    if (hasCoordinationStarted) {
+      console.log(`Coordination already exists for user ${userId}`);
+      return;
+    }
+
+    // Check if birthday is within 14 days
+    const upcomingBirthdays = await getUpcomingBirthdays(14);
+    const userBirthday = upcomingBirthdays.find(b => b.userId === userId);
+
+    if (userBirthday) {
+      console.log(`Birthday for user ${userId} is within 14 days (${userBirthday.birthday}) - starting coordination`);
+      await startBirthdayCardCoordination(client, userId);
+    } else {
+      console.log(`Birthday for user ${userId} is more than 14 days away - will be handled by daily scheduler`);
+    }
+  } catch (error) {
+    console.error(`Error checking immediate coordination for user ${userId}:`, error);
+  }
+}
+/**
  * Check for birthdays that need card coordination to start (14 days ahead)
  */
 export async function checkBirthdays(client: Client) {
@@ -19,7 +75,15 @@ export async function checkBirthdays(client: Client) {
 
     for (const birthday of upcomingBirthdays) {
       try {
-        await startBirthdayCardCoordination(client, birthday.userId);
+        // Check if coordination has already started
+        const hasCoordinationStarted = await checkCoordinationStatus(client, birthday.userId);
+
+        if (!hasCoordinationStarted) {
+          console.log(`Starting coordination for ${birthday.userId} (birthday: ${birthday.birthday})`);
+          await startBirthdayCardCoordination(client, birthday.userId);
+        } else {
+          console.log(`Coordination already started for ${birthday.userId}`);
+        }
       } catch (error) {
         console.error(`Error starting coordination for user ${birthday.userId}:`, error);
       }
@@ -50,11 +114,13 @@ async function startBirthdayCardCoordination(client: Client, userId: string) {
       const existingChannel = findBirthdayChannel(guild, userId, member.user.username);
 
       if (existingChannel) {
-        console.log(`Channel ${existingChannel.name} already exists in guild ${guild.name}`);
+        console.log(`Channel ${existingChannel.name} already exists in guild ${guild.name} - coordination already started`);
         // Update channel if username has changed
         await updateChannelForUsernameChange(existingChannel, userId, member.user.username);
         continue;
       }
+
+      console.log(`Creating new coordination channel for ${member.user.username} in guild ${guild.name}`);
 
       // Create private coordination channel
       const channel = await guild.channels.create({
