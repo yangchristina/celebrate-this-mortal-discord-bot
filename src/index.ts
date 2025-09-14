@@ -30,6 +30,7 @@ const client = new Client({
 // Import command handlers
 import { setBirthdayCommand } from './commands/setBirthday';
 import { getBirthdayCommand } from './commands/getBirthday';
+import { setBirthday } from './utils/firestore';
 
 // Slash command definitions
 const commands = [
@@ -102,29 +103,96 @@ client.once(Events.ClientReady, async () => {
 });
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+  if (interaction.isChatInputCommand()) {
+    const { commandName } = interaction;
 
-  const { commandName } = interaction;
+    try {
+      switch (commandName) {
+        case 'set-birthday':
+          await setBirthdayCommand.execute(interaction);
+          break;
+        case 'get-birthday':
+          await getBirthdayCommand.execute(interaction);
+          break;
+        default:
+          await interaction.reply({ content: 'Command not implemented yet!', ephemeral: true });
+      }
+    } catch (error) {
+      console.error('Error executing command:', error);
+      const errorMessage = 'There was an error executing this command!';
 
-  try {
-    switch (commandName) {
-      case 'set-birthday':
-        await setBirthdayCommand.execute(interaction);
-        break;
-      case 'get-birthday':
-        await getBirthdayCommand.execute(interaction);
-        break;
-      default:
-        await interaction.reply({ content: 'Command not implemented yet!', ephemeral: true });
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp({ content: errorMessage, ephemeral: true });
+      } else {
+        await interaction.reply({ content: errorMessage, ephemeral: true });
+      }
     }
-  } catch (error) {
-    console.error('Error executing command:', error);
-    const errorMessage = 'There was an error executing this command!';
+  } else if (interaction.isButton()) {
+    // Handle button interactions
+    const { customId } = interaction;
 
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({ content: errorMessage, ephemeral: true });
-    } else {
-      await interaction.reply({ content: errorMessage, ephemeral: true });
+    try {
+      if (customId.startsWith('confirm_birthday_update_')) {
+        // Extract user ID and new date from custom ID
+        const parts = customId.split('_');
+        const userId = parts[3];
+        const newDate = parts[4];
+
+        // Store the birthday in Firestore
+        await setBirthday(userId, newDate);
+
+        // Get user object for display
+        const user = await client.users.fetch(userId);
+
+        // Calculate when the card event will start (14 days before)
+        const [month, day] = newDate.split('-').map(num => parseInt(num, 10));
+        const currentYear = new Date().getFullYear();
+        const birthdayThisYear = new Date(currentYear, month - 1, day);
+        const today = new Date();
+
+        const birthdayDate = birthdayThisYear < today
+          ? new Date(currentYear + 1, month - 1, day)
+          : birthdayThisYear;
+
+        const eventStartDate = new Date(birthdayDate);
+        eventStartDate.setDate(birthdayDate.getDate() - 14);
+
+        const birthdayFormatted = birthdayDate.toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric'
+        });
+
+        const eventStartFormatted = eventStartDate.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+
+        await interaction.update({
+          content: `🎂 **Birthday updated for ${user.displayName}!**\n` +
+                  `📅 Birthday: ${birthdayFormatted}\n` +
+                  `🎉 Card coordination will start on: ${eventStartFormatted}\n\n` +
+                  `*The bot will automatically create a private channel and start template voting 2 weeks before the birthday.*`,
+          components: [] // Remove buttons
+        });
+
+        console.log(`Birthday updated for user ${userId} (${user.username}): ${newDate}`);
+
+      } else if (customId.startsWith('cancel_birthday_update_')) {
+        await interaction.update({
+          content: '❌ Birthday update cancelled.',
+          components: []
+        });
+      }
+    } catch (error) {
+      console.error('Error handling button interaction:', error);
+      const errorMessage = 'There was an error processing your request!';
+
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp({ content: errorMessage, ephemeral: true });
+      } else {
+        await interaction.reply({ content: errorMessage, ephemeral: true });
+      }
     }
   }
 });

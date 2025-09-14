@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction, User } from 'discord.js';
+import { ChatInputCommandInteraction, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { setBirthday, isValidBirthday, getBirthday } from '../utils/firestore';
 
 export const setBirthdayCommand = {
@@ -37,12 +37,25 @@ export const setBirthdayCommand = {
       // Check if birthday already exists
       const existingBirthday = await getBirthday(user.id);
       if (existingBirthday) {
+        const confirmButton = new ButtonBuilder()
+          .setCustomId(`confirm_birthday_update_${user.id}_${dateString}`)
+          .setLabel('✅ Confirm Update')
+          .setStyle(ButtonStyle.Success);
+
+        const cancelButton = new ButtonBuilder()
+          .setCustomId(`cancel_birthday_update_${user.id}`)
+          .setLabel('❌ Cancel')
+          .setStyle(ButtonStyle.Secondary);
+
+        const row = new ActionRowBuilder<ButtonBuilder>()
+          .addComponents(confirmButton, cancelButton);
+
         await interaction.reply({
           content: `⚠️ **${user.displayName} already has a birthday set: ${existingBirthday}**\n\n` +
-                  `Would you like to update it to ${dateString}? React with ✅ to confirm.`,
+                  `Would you like to update it to ${dateString}?`,
+          components: [row],
           ephemeral: true
         });
-        // TODO: Add reaction-based confirmation for updates
         return;
       }
 
