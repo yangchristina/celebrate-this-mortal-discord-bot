@@ -40,19 +40,34 @@ npm install
 
 ### 4. Environment Configuration
 
-Create a `.env` file in the root directory:
+**⚠️ Security Note:** Never commit your `.env` file with real credentials to version control. The repository includes `.env.example` as a template.
+
+Copy the example environment file and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` with your actual credentials:
 
 ```env
 # Discord Bot Configuration
 DISCORD_TOKEN=your_discord_bot_token_here
 
-# Firebase Configuration
+# Firebase Admin Configuration (for server-side operations)
+FIREBASE_PRIVATE_KEY_ID=your_private_key_id
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nyour_private_key_here\n-----END PRIVATE KEY-----\n"
+FIREBASE_CLIENT_EMAIL=your_client_email
+FIREBASE_CLIENT_ID=your_client_id
+
+# Firebase App Configuration (for client-side operations)
 FIREBASE_API_KEY=your_firebase_api_key_here
 FIREBASE_AUTH_DOMAIN=your_project_id.firebaseapp.com
 FIREBASE_PROJECT_ID=your_project_id_here
 FIREBASE_STORAGE_BUCKET=your_project_id.appspot.com
 FIREBASE_MESSAGING_SENDER_ID=your_sender_id_here
 FIREBASE_APP_ID=your_app_id_here
+FIREBASE_MEASUREMENT_ID=your_measurement_id_here
 
 # E-Card API Configuration
 ECARD_API_BASE_URL=https://celebratethismortal.com/api/discord
